@@ -116,13 +116,13 @@ function getPlayerStats(guildId, userId) {
       currentStreak: 0,
       autoWinStreak: 0,
       autoLoseStreak: 0,
-      elo: 1000
+      elo: 800
     });
     savePlayers();
   }
   const stats = playerStats.get(key);
   if (stats.elo === undefined) {
-    stats.elo = 1000;
+    stats.elo = 800;
     savePlayers();
   }
   return stats;
@@ -848,7 +848,7 @@ client.on('interactionCreate', async interaction => {
         .setDescription(leaderboardText)
         .addFields(
           { name: '📊 Rank Tiers', value: 
-            '💎 DIAMOND: 1600+\n🏆 PLATINUM: 1400-1599\n🥇 GOLD: 1200-1399\n🥈 SILVER: 1000-1199\n🥉 BRONZE: 800-999', inline: false }
+            '💎 DIAMOND: 1600-1700\n🏆 PLATINUM: 1400-1500\n🥇 GOLD: 1200-1300\n🥈 SILVER: 1000-1100\n🥉 BRONZE: 800-900', inline: false }
         )
         .setFooter({ text: 'Each win grants ELO to climb ranks!' });
 
