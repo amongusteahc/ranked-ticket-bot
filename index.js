@@ -820,7 +820,7 @@ client.on('interactionCreate', async interaction => {
     else if (commandName === 'stats') {
       const player = interaction.options.getUser('player') || member.user;
       const stats = getPlayerStats(guild.id, player.id);
-      
+
       const elo1v1 = stats.elo1v1 || 800;
       const elo2v2 = stats.elo2v2 || 800;
       const highestElo = Math.max(elo1v1, elo2v2);
@@ -877,13 +877,13 @@ client.on('interactionCreate', async interaction => {
       const user = interaction.options.getUser('user');
       const mode = interaction.options.getString('mode');
       const stats = getPlayerStats(guild.id, user.id);
-      
+
       const eloKey = mode === '1v1' ? 'elo1v1' : 'elo2v2';
       const oldRank = getRankFromElo(stats[eloKey]);
-      
+
       stats[eloKey] += amount;
       savePlayers();
-      
+
       const newRank = getRankFromElo(stats[eloKey]);
       const rankChanged = oldRank.name !== newRank.name;
 
@@ -915,13 +915,13 @@ client.on('interactionCreate', async interaction => {
       const user = interaction.options.getUser('user');
       const mode = interaction.options.getString('mode');
       const stats = getPlayerStats(guild.id, user.id);
-      
+
       const eloKey = mode === '1v1' ? 'elo1v1' : 'elo2v2';
       const oldRank = getRankFromElo(stats[eloKey]);
-      
+
       stats[eloKey] = Math.max(0, stats[eloKey] - amount);
       savePlayers();
-      
+
       const newRank = getRankFromElo(stats[eloKey]);
       const rankChanged = oldRank.name !== newRank.name;
 
@@ -952,7 +952,7 @@ client.on('interactionCreate', async interaction => {
       const amount = interaction.options.getInteger('amount');
       const user = interaction.options.getUser('user');
       const stats = getPlayerStats(guild.id, user.id);
-      
+
       const oldWins = stats.wins;
       stats.wins = Math.max(0, stats.wins - amount);
       const removed = oldWins - stats.wins;
@@ -986,7 +986,7 @@ client.on('interactionCreate', async interaction => {
       const amount = interaction.options.getInteger('amount');
       const user = interaction.options.getUser('user');
       const stats = getPlayerStats(guild.id, user.id);
-      
+
       const oldLosses = stats.losses;
       stats.losses = Math.max(0, stats.losses - amount);
       const removed = oldLosses - stats.losses;
@@ -1013,7 +1013,7 @@ client.on('interactionCreate', async interaction => {
       const mode = interaction.options.getString('mode');
       const eloKey = mode === '1v1' ? 'elo1v1' : 'elo2v2';
       const guildPlayers = [];
-      
+
       for (const [key, stats] of playerStats) {
         if (stats.guildId === guild.id) {
           guildPlayers.push(stats);
@@ -1070,14 +1070,14 @@ client.on('interactionCreate', async interaction => {
 
     else if (commandName === 'setleaderboardchannel') {
       const channel = interaction.options.getChannel('channel');
-      
+
       if (channel.type !== ChannelType.GuildText) {
         return interaction.reply({
           content: 'Please select a text channel, not a voice or category channel.',
           ephemeral: true
         });
       }
-      
+
       settings.leaderboardChannel = channel.id;
       settings.leaderboardMessages = { '1v1': null, '2v2': null };
       saveSettings();
@@ -1159,7 +1159,7 @@ client.on('interactionCreate', async interaction => {
 
         try {
           const existingMessageId = settings.leaderboardMessages[mode];
-          
+
           if (existingMessageId) {
             try {
               const existingMessage = await leaderboardChannel.messages.fetch(existingMessageId);
@@ -1198,14 +1198,14 @@ client.on('interactionCreate', async interaction => {
 
     else if (commandName === 'setdodgechannel') {
       const channel = interaction.options.getChannel('channel');
-      
+
       if (channel.type !== ChannelType.GuildText) {
         return interaction.reply({
           content: 'Please select a text channel, not a voice or category channel.',
           ephemeral: true
         });
       }
-      
+
       settings.dodgeChannel = channel.id;
       saveSettings();
 
@@ -1238,16 +1238,11 @@ client.on('interactionCreate', async interaction => {
         .addFields(
           { name: 'DODGER', value: `❌ ${dodger.username}`, inline: true },
           { name: 'OPPONENT', value: opponent.username, inline: true }
-        );
-
-      if (dodger.avatarURL()) {
-        embed.setImage(dodger.avatarURL());
-      }
-
-      embed.addFields(
-        { name: 'Total Dodges', value: `${stats.dodges}`, inline: true },
-        { name: 'Reported By', value: `${member}`, inline: true }
-      ).setTimestamp();
+        )
+        .addFields(
+          { name: 'Total Dodges', value: `${stats.dodges}`, inline: true },
+          { name: 'Reported By', value: `${member}`, inline: true }
+        ).setTimestamp();
 
       await interaction.reply({ embeds: [embed] });
 
@@ -1272,7 +1267,7 @@ client.on('interactionCreate', async interaction => {
               .setTimestamp();
 
             if (dodgerAvatar) {
-              dodgeEmbed.setThumbnail(dodgerAvatar);
+              dodgeEmbed.setImage(dodgerAvatar);
             }
 
             await dodgeChannel.send({ content: `${member}`, embeds: [dodgeEmbed] });
@@ -1294,7 +1289,7 @@ client.on('interactionCreate', async interaction => {
       const amount = interaction.options.getInteger('amount');
       const user = interaction.options.getUser('user');
       const stats = getPlayerStats(guild.id, user.id);
-      
+
       const oldDodges = stats.dodges;
       stats.dodges = Math.max(0, stats.dodges - amount);
       const removed = oldDodges - stats.dodges;
@@ -1430,4 +1425,6 @@ if (!process.env.DISCORD_BOT_TOKEN) {
 }
 
 client.login(process.env.DISCORD_BOT_TOKEN);
+
+
 
