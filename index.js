@@ -380,8 +380,12 @@ const commands = [
     .setName('dodge')
     .setDescription('Record a player dodging a match (hosts only)')
     .addUserOption(option =>
-      option.setName('user')
+      option.setName('dodger')
         .setDescription('The player who dodged')
+        .setRequired(true))
+    .addUserOption(option =>
+      option.setName('opponent')
+        .setDescription('The player they dodged against')
         .setRequired(true)),
 
   new SlashCommandBuilder()
@@ -391,7 +395,21 @@ const commands = [
       option.setName('channel')
         .setDescription('The channel for dodge records')
         .setRequired(true))
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+
+  new SlashCommandBuilder()
+    .setName('removedodges')
+    .setDescription('Remove dodges from a player (hosts only)')
+    .addIntegerOption(option =>
+      option.setName('amount')
+        .setDescription('Number of dodges to remove')
+        .setRequired(true)
+        .setMinValue(1)
+        .setMaxValue(1000))
+    .addUserOption(option =>
+      option.setName('user')
+        .setDescription('The user to remove dodges from')
+        .setRequired(true))
 ].map(command => command.toJSON());
 
 client.once('ready', async () => {
@@ -1207,19 +1225,29 @@ client.on('interactionCreate', async interaction => {
         });
       }
 
-      const dodger = interaction.options.getUser('user');
+      const dodger = interaction.options.getUser('dodger');
+      const opponent = interaction.options.getUser('opponent');
       const stats = getPlayerStats(guild.id, dodger.id);
       stats.dodges++;
       savePlayers();
 
       const embed = new EmbedBuilder()
         .setColor(0xFF6B6B)
-        .setTitle('❌ Dodge Recorded')
-        .setDescription(`${dodger} has dodged a match!`)
+        .setTitle('❌ Wager Dodge')
+        .setDescription(`${dodger} dodged a wager vs ${opponent}`)
         .addFields(
-          { name: 'Total Dodges', value: `${stats.dodges}`, inline: true },
-          { name: 'Reported By', value: `${member}`, inline: true }
+          { name: 'DODGER', value: `❌ ${dodger.username}`, inline: true },
+          { name: 'OPPONENT', value: opponent.username, inline: true }
         );
+
+      if (dodger.avatarURL()) {
+        embed.setImage(dodger.avatarURL());
+      }
+
+      embed.addFields(
+        { name: 'Total Dodges', value: `${stats.dodges}`, inline: true },
+        { name: 'Reported By', value: `${member}`, inline: true }
+      ).setTimestamp();
 
       await interaction.reply({ embeds: [embed] });
 
@@ -1227,22 +1255,61 @@ client.on('interactionCreate', async interaction => {
         try {
           const dodgeChannel = guild.channels.cache.get(settings.dodgeChannel);
           if (dodgeChannel) {
+            const dodgerAvatar = dodger.avatarURL() || null;
+            const opponentAvatar = opponent.avatarURL() || null;
+
             const dodgeEmbed = new EmbedBuilder()
               .setColor(0xFF6B6B)
-              .setTitle('❌ Dodge Alert')
+              .setTitle('🚫 Wager Dodge')
+              .setDescription(`${dodger} dodged a wager vs ${opponent}`)
               .addFields(
-                { name: 'Dodger', value: `${dodger.username}`, inline: true },
-                { name: 'Total Dodges', value: `${stats.dodges}`, inline: true }
+                { name: 'DODGER', value: `❌ ${dodger.username}`, inline: true },
+                { name: 'OPPONENT', value: opponent.username, inline: true }
               )
-              .setThumbnail(dodger.avatarURL() || null)
+              .addFields(
+                { name: 'Marked by', value: `${member}`, inline: false }
+              )
               .setTimestamp();
 
-            await dodgeChannel.send({ embeds: [dodgeEmbed] });
+            if (dodgerAvatar) {
+              dodgeEmbed.setThumbnail(dodgerAvatar);
+            }
+
+            await dodgeChannel.send({ content: `${member}`, embeds: [dodgeEmbed] });
           }
         } catch (error) {
           console.error('Error posting dodge to channel:', error);
         }
       }
+    }
+
+    else if (commandName === 'removedodges') {
+      if (!isHost(member, guild.id)) {
+        return interaction.reply({ 
+          content: 'Only hosts can use this command.', 
+          ephemeral: true 
+        });
+      }
+
+      const amount = interaction.options.getInteger('amount');
+      const user = interaction.options.getUser('user');
+      const stats = getPlayerStats(guild.id, user.id);
+      
+      const oldDodges = stats.dodges;
+      stats.dodges = Math.max(0, stats.dodges - amount);
+      const removed = oldDodges - stats.dodges;
+      savePlayers();
+
+      const embed = new EmbedBuilder()
+        .setColor(0x57F287)
+        .setTitle('Dodges Removed')
+        .setDescription(`${user} has had **${removed}** dodge(s) removed.`)
+        .addFields(
+          { name: 'Total Dodges', value: `${stats.dodges}`, inline: true },
+          { name: 'Removed By', value: `${member}`, inline: true }
+        );
+
+      await interaction.reply({ embeds: [embed] });
     }
   }
 
@@ -1363,3 +1430,4 @@ if (!process.env.DISCORD_BOT_TOKEN) {
 }
 
 client.login(process.env.DISCORD_BOT_TOKEN);
+
