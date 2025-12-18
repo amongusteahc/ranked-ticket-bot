@@ -1231,38 +1231,23 @@ client.on('interactionCreate', async interaction => {
       stats.dodges++;
       savePlayers();
 
-      const embed = new EmbedBuilder()
-        .setColor(0xFF6B6B)
-        .setTitle('❌ Wager Dodge')
-        .setDescription(`${dodger} dodged a wager vs ${opponent}`)
-        .addFields(
-          { name: 'DODGER', value: `❌ ${dodger.username}`, inline: true },
-          { name: 'OPPONENT', value: opponent.username, inline: true }
-        )
-        .addFields(
-          { name: 'Total Dodges', value: `${stats.dodges}`, inline: true },
-          { name: 'Reported By', value: `${member}`, inline: true }
-        ).setTimestamp();
-
-      await interaction.reply({ embeds: [embed] });
-
       if (settings.dodgeChannel) {
         try {
           const dodgeChannel = guild.channels.cache.get(settings.dodgeChannel);
           if (dodgeChannel) {
             const dodgerAvatar = dodger.avatarURL() || null;
-            const opponentAvatar = opponent.avatarURL() || null;
 
             const dodgeEmbed = new EmbedBuilder()
               .setColor(0xFF6B6B)
-              .setTitle('🚫 Wager Dodge')
+              .setTitle('❌ Wager Dodge')
               .setDescription(`${dodger} dodged a wager vs ${opponent}`)
               .addFields(
                 { name: 'DODGER', value: `❌ ${dodger.username}`, inline: true },
-                { name: 'OPPONENT', value: opponent.username, inline: true }
+                { name: 'OPPONENT', value: opponent.username, inline: true },
+                { name: 'Total Dodges', value: `${stats.dodges}`, inline: true }
               )
               .addFields(
-                { name: 'Marked by', value: `${member}`, inline: false }
+                { name: 'Reported By', value: `${member}`, inline: false }
               )
               .setTimestamp();
 
@@ -1270,12 +1255,17 @@ client.on('interactionCreate', async interaction => {
               dodgeEmbed.setImage(dodgerAvatar);
             }
 
-            await dodgeChannel.send({ content: `${member}`, embeds: [dodgeEmbed] });
+            await dodgeChannel.send({ embeds: [dodgeEmbed] });
           }
         } catch (error) {
           console.error('Error posting dodge to channel:', error);
         }
       }
+
+      await interaction.reply({ 
+        content: `✅ Dodge recorded for ${dodger} vs ${opponent}!`, 
+        ephemeral: true 
+      });
     }
 
     else if (commandName === 'removedodges') {
@@ -1425,6 +1415,4 @@ if (!process.env.DISCORD_BOT_TOKEN) {
 }
 
 client.login(process.env.DISCORD_BOT_TOKEN);
-
-
 
