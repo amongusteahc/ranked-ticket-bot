@@ -118,7 +118,8 @@ function getPlayerStats(guildId, userId) {
       autoLoseStreak: 0,
       elo: 800,
       elo1v1: 800,
-      elo2v2: 800
+      elo2v2: 800,
+      dodges: 0
     });
     savePlayers();
   }
@@ -126,6 +127,7 @@ function getPlayerStats(guildId, userId) {
   if (stats.elo === undefined) stats.elo = 800;
   if (stats.elo1v1 === undefined) stats.elo1v1 = 800;
   if (stats.elo2v2 === undefined) stats.elo2v2 = 800;
+  if (stats.dodges === undefined) stats.dodges = 0;
   savePlayers();
   return stats;
 }
@@ -372,7 +374,24 @@ const commands = [
 
   new SlashCommandBuilder()
     .setName('updateleaderboard')
-    .setDescription('Post or update the leaderboard panels (hosts only)')
+    .setDescription('Post or update the leaderboard panels (hosts only)'),
+
+  new SlashCommandBuilder()
+    .setName('dodge')
+    .setDescription('Record a player dodging a match (hosts only)')
+    .addUserOption(option =>
+      option.setName('user')
+        .setDescription('The player who dodged')
+        .setRequired(true)),
+
+  new SlashCommandBuilder()
+    .setName('setdodgechannel')
+    .setDescription('Set the channel where dodge records will be posted')
+    .addChannelOption(option =>
+      option.setName('channel')
+        .setDescription('The channel for dodge records')
+        .setRequired(true))
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
 ].map(command => command.toJSON());
 
 client.once('ready', async () => {
@@ -405,13 +424,15 @@ function getSettings(guildId) {
       logChannel: null,
       matchCategory: null,
       leaderboardChannel: null,
-      leaderboardMessages: { '1v1': null, '2v2': null }
+      leaderboardMessages: { '1v1': null, '2v2': null },
+      dodgeChannel: null
     });
     saveSettings();
   }
   const settings = guildSettings.get(guildId);
   if (!settings.leaderboardChannel) settings.leaderboardChannel = null;
   if (!settings.leaderboardMessages) settings.leaderboardMessages = { '1v1': null, '2v2': null };
+  if (!settings.dodgeChannel) settings.dodgeChannel = null;
   return settings;
 }
 
@@ -1156,6 +1177,73 @@ client.on('interactionCreate', async interaction => {
 
       await interaction.editReply({ embeds: [successEmbed] });
     }
+
+    else if (commandName === 'setdodgechannel') {
+      const channel = interaction.options.getChannel('channel');
+      
+      if (channel.type !== ChannelType.GuildText) {
+        return interaction.reply({
+          content: 'Please select a text channel, not a voice or category channel.',
+          ephemeral: true
+        });
+      }
+      
+      settings.dodgeChannel = channel.id;
+      saveSettings();
+
+      const embed = new EmbedBuilder()
+        .setColor(0xFF6B6B)
+        .setTitle('Dodge Channel Set')
+        .setDescription(`Dodge records will now be posted in ${channel}\n\nUse \`/dodge @user\` to record a dodge.`);
+
+      await interaction.reply({ embeds: [embed], ephemeral: true });
+    }
+
+    else if (commandName === 'dodge') {
+      if (!isHost(member, guild.id)) {
+        return interaction.reply({ 
+          content: 'Only hosts can use this command.', 
+          ephemeral: true 
+        });
+      }
+
+      const dodger = interaction.options.getUser('user');
+      const stats = getPlayerStats(guild.id, dodger.id);
+      stats.dodges++;
+      savePlayers();
+
+      const embed = new EmbedBuilder()
+        .setColor(0xFF6B6B)
+        .setTitle('❌ Dodge Recorded')
+        .setDescription(`${dodger} has dodged a match!`)
+        .addFields(
+          { name: 'Total Dodges', value: `${stats.dodges}`, inline: true },
+          { name: 'Reported By', value: `${member}`, inline: true }
+        );
+
+      await interaction.reply({ embeds: [embed] });
+
+      if (settings.dodgeChannel) {
+        try {
+          const dodgeChannel = guild.channels.cache.get(settings.dodgeChannel);
+          if (dodgeChannel) {
+            const dodgeEmbed = new EmbedBuilder()
+              .setColor(0xFF6B6B)
+              .setTitle('❌ Dodge Alert')
+              .addFields(
+                { name: 'Dodger', value: `${dodger.username}`, inline: true },
+                { name: 'Total Dodges', value: `${stats.dodges}`, inline: true }
+              )
+              .setThumbnail(dodger.avatarURL() || null)
+              .setTimestamp();
+
+            await dodgeChannel.send({ embeds: [dodgeEmbed] });
+          }
+        } catch (error) {
+          console.error('Error posting dodge to channel:', error);
+        }
+      }
+    }
   }
 
   else if (interaction.isButton()) {
@@ -1275,4 +1363,3 @@ if (!process.env.DISCORD_BOT_TOKEN) {
 }
 
 client.login(process.env.DISCORD_BOT_TOKEN);
-
