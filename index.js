@@ -33,7 +33,7 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`UptimeRobot can ping: http://0.0.0.0:${PORT}/ or /health`);
 });
 
-const DATA_DIR = './data';
+const DATA_DIR = fs.existsSync('/app/data') ? '/app/data' : './data';
 const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
 const MATCHES_FILE = path.join(DATA_DIR, 'matches.json');
 const PLAYERS_FILE = path.join(DATA_DIR, 'players.json');
