@@ -33,7 +33,7 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`UptimeRobot can ping: http://0.0.0.0:${PORT}/ or /health`);
 });
 
-const DATA_DIR = './data';
+const DATA_DIR = '/data';
 const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
 const MATCHES_FILE = path.join(DATA_DIR, 'matches.json');
 const PLAYERS_FILE = path.join(DATA_DIR, 'players.json');
@@ -423,28 +423,6 @@ client.once('ready', async () => {
   console.log(`Loaded ${activeMatches.size} active matches`);
   console.log(`Loaded ${playerStats.size} player stats`);
 
-  // Clean up old match data for channels that no longer exist
-  const channelsToDelete = [];
-  for (const [channelId] of activeMatches) {
-    try {
-      const channel = await client.channels.fetch(channelId).catch(() => null);
-      if (!channel) {
-        channelsToDelete.push(channelId);
-      }
-    } catch (error) {
-      channelsToDelete.push(channelId);
-    }
-  }
-  
-  for (const channelId of channelsToDelete) {
-    activeMatches.delete(channelId);
-    console.log(`Removed stale match data for channel ${channelId}`);
-  }
-  
-  if (channelsToDelete.length > 0) {
-    saveMatches();
-  }
-
   const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_BOT_TOKEN);
 
   try {
@@ -458,6 +436,14 @@ client.once('ready', async () => {
     console.log('Successfully reloaded application (/) commands.');
   } catch (error) {
     console.error('Error registering commands:', error);
+  }
+});
+
+client.on('channelDelete', channel => {
+  if (activeMatches.has(channel.id)) {
+    activeMatches.delete(channel.id);
+    saveMatches();
+    console.log(`Match data cleaned for deleted channel ${channel.id}`);
   }
 });
 
