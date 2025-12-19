@@ -423,6 +423,20 @@ client.once('ready', async () => {
   console.log(`Loaded ${activeMatches.size} active matches`);
   console.log(`Loaded ${playerStats.size} player stats`);
 
+  // Clean up old match data for channels that no longer exist
+  for (const [channelId] of activeMatches) {
+    try {
+      const channel = await client.channels.fetch(channelId).catch(() => null);
+      if (!channel) {
+        activeMatches.delete(channelId);
+        console.log(`Removed stale match data for channel ${channelId}`);
+      }
+    } catch (error) {
+      activeMatches.delete(channelId);
+    }
+  }
+  saveMatches();
+
   const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_BOT_TOKEN);
 
   try {
