@@ -33,7 +33,7 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`UptimeRobot can ping: http://0.0.0.0:${PORT}/ or /health`);
 });
 
-const DATA_DIR = fs.existsSync('/app/data') ? '/app/data' : './data';
+const DATA_DIR = './data';
 const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
 const MATCHES_FILE = path.join(DATA_DIR, 'matches.json');
 const PLAYERS_FILE = path.join(DATA_DIR, 'players.json');
@@ -619,56 +619,71 @@ client.on('interactionCreate', async interaction => {
     }
 
     else if (commandName === 'add') {
-      const matchData = getMatchData(channel.id);
-      
-      console.log(`DEBUG add command: channel.id=${channel.id}, matchData=${matchData ? 'exists' : 'null'}, activeMatches.size=${activeMatches.size}`);
-      if (activeMatches.size > 0) {
-        console.log(`DEBUG activeMatches keys: ${[...activeMatches.keys()].join(', ')}`);
-      }
+  const { guild, channel, member } = interaction;
 
-      if (!matchData) {
-        return interaction.reply({ 
-          content: 'This command can only be used in a match channel.', 
-          ephemeral: true 
-        });
-      }
+  // ✅ Check if this channel is an active match channel
+  if (!activeMatches.has(channel.id)) {
+    return interaction.reply({
+      content: '❌ This command can only be used in an active wager/match channel.',
+      ephemeral: true
+    });
+  }
 
-      const guildMember = await guild.members.fetch(member.id);
-      if (member.id !== matchData.creator && !isHost(guildMember, guild.id)) {
-        return interaction.reply({ 
-          content: 'Only the match creator or hosts can add users.', 
-          ephemeral: true 
-        });
-      }
+  const userToAdd = interaction.options.getUser('user');
+  const matchData = activeMatches.get(channel.id);
 
-      const userToAdd = interaction.options.getUser('user');
+  // ✅ Prevent duplicates
+  if (matchData.participants.includes(userToAdd.id)) {
+    return interaction.reply({
+      content: '❌ That user is already in this match.',
+      ephemeral: true
+    });
+  }
 
-      try {
-        await channel.permissionOverwrites.create(userToAdd.id, {
-          ViewChannel: true,
-          SendMessages: true,
-          ReadMessageHistory: true
-        });
+  // ✅ Enforce player limits
+  const maxPlayers =
+    matchData.type === '1v1' ? 2 :
+    matchData.type === '2v2' ? 4 : 6;
 
-        if (!matchData.participants.includes(userToAdd.id)) {
-          matchData.participants.push(userToAdd.id);
-          saveMatches();
-        }
+  if (matchData.participants.length >= maxPlayers) {
+    return interaction.reply({
+      content: `❌ This ${matchData.type} match already has the maximum number of players (${maxPlayers}).`,
+      ephemeral: true
+    });
+  }
 
-        const embed = new EmbedBuilder()
-          .setColor(0x57F287)
-          .setTitle('User Added')
-          .setDescription(`${userToAdd} has been added to this match.`);
+  try {
+    // ✅ Give channel access
+    await channel.permissionOverwrites.edit(userToAdd.id, {
+      ViewChannel: true,
+      SendMessages: true,
+      ReadMessageHistory: true
+    });
 
-        await interaction.reply({ embeds: [embed] });
-      } catch (error) {
-        console.error('Error adding user:', error);
-        await interaction.reply({ 
-          content: 'Failed to add user to this match. Make sure the bot has "Manage Permissions" and "Manage Channels" permissions.', 
-          ephemeral: true 
-        });
-      }
-    }
+    // ✅ Save participant
+    matchData.participants.push(userToAdd.id);
+    activeMatches.set(channel.id, matchData);
+    saveMatches();
+
+    const embed = new EmbedBuilder()
+      .setColor(0x57F287)
+      .setTitle('Player Added')
+      .setDescription(`${userToAdd} has been added to this ${matchData.type} match.`)
+      .addFields(
+        { name: 'Added By', value: `${member}`, inline: true },
+        { name: 'Total Players', value: `${matchData.participants.length}/${maxPlayers}`, inline: true }
+      );
+
+    await interaction.reply({ embeds: [embed] });
+
+  } catch (error) {
+    console.error('Error adding user to match:', error);
+    await interaction.reply({
+      content: '❌ Failed to add user. Check my permissions.',
+      ephemeral: true
+    });
+  }
+}
 
     else if (commandName === 'win') {
       if (!isHost(member, guild.id)) {
