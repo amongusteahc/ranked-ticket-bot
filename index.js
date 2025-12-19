@@ -633,7 +633,8 @@ client.on('interactionCreate', async interaction => {
         });
       }
 
-      if (member.id !== matchData.creator && !isHost(member, guild.id)) {
+      const guildMember = await guild.members.fetch(member.id);
+      if (member.id !== matchData.creator && !isHost(guildMember, guild.id)) {
         return interaction.reply({ 
           content: 'Only the match creator or hosts can add users.', 
           ephemeral: true 
@@ -663,7 +664,7 @@ client.on('interactionCreate', async interaction => {
       } catch (error) {
         console.error('Error adding user:', error);
         await interaction.reply({ 
-          content: 'Failed to add user to this match.', 
+          content: 'Failed to add user to this match. Make sure the bot has "Manage Permissions" and "Manage Channels" permissions.', 
           ephemeral: true 
         });
       }
