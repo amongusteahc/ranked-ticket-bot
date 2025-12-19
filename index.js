@@ -119,6 +119,7 @@ function getPlayerStats(guildId, userId) {
       elo: 800,
       elo1v1: 800,
       elo2v2: 800,
+      elo3v3: 800,
       dodges: 0
     });
     savePlayers();
@@ -127,6 +128,7 @@ function getPlayerStats(guildId, userId) {
   if (stats.elo === undefined) stats.elo = 800;
   if (stats.elo1v1 === undefined) stats.elo1v1 = 800;
   if (stats.elo2v2 === undefined) stats.elo2v2 = 800;
+  if (stats.elo3v3 === undefined) stats.elo3v3 = 800;
   if (stats.dodges === undefined) stats.dodges = 0;
   savePlayers();
   return stats;
@@ -294,11 +296,12 @@ const commands = [
         .setRequired(true))
     .addStringOption(option =>
       option.setName('mode')
-        .setDescription('Game mode (1v1 or 2v2)')
+        .setDescription('Game mode (1v1, 2v2, or 3v3)')
         .setRequired(true)
         .addChoices(
           { name: '1v1', value: '1v1' },
-          { name: '2v2', value: '2v2' }
+          { name: '2v2', value: '2v2' },
+          { name: '3v3', value: '3v3' }
         )),
 
   new SlashCommandBuilder()
@@ -316,12 +319,21 @@ const commands = [
         .setRequired(true))
     .addStringOption(option =>
       option.setName('mode')
-        .setDescription('Game mode (1v1 or 2v2)')
+        .setDescription('Game mode (1v1, 2v2, or 3v3)')
         .setRequired(true)
         .addChoices(
           { name: '1v1', value: '1v1' },
-          { name: '2v2', value: '2v2' }
+          { name: '2v2', value: '2v2' },
+          { name: '3v3', value: '3v3' }
         )),
+
+  new SlashCommandBuilder()
+    .setName('kick')
+    .setDescription('Kick a user from the wager channel (hosts only)')
+    .addUserOption(option =>
+      option.setName('user')
+        .setDescription('The user to kick')
+        .setRequired(true)),
 
   new SlashCommandBuilder()
     .setName('removewins')
@@ -353,15 +365,7 @@ const commands = [
 
   new SlashCommandBuilder()
     .setName('leaderboard')
-    .setDescription('View the top 10 ELO leaderboard')
-    .addStringOption(option =>
-      option.setName('mode')
-        .setDescription('Game mode (1v1 or 2v2)')
-        .setRequired(true)
-        .addChoices(
-          { name: '1v1', value: '1v1' },
-          { name: '2v2', value: '2v2' }
-        )),
+    .setDescription('View the top 10 ELO leaderboards for all modes'),
 
   new SlashCommandBuilder()
     .setName('setleaderboardchannel')
@@ -823,9 +827,11 @@ client.on('interactionCreate', async interaction => {
 
       const elo1v1 = stats.elo1v1 || 800;
       const elo2v2 = stats.elo2v2 || 800;
-      const highestElo = Math.max(elo1v1, elo2v2);
+      const elo3v3 = stats.elo3v3 || 800;
+      const highestElo = Math.max(elo1v1, elo2v2, elo3v3);
       const rank1v1 = getRankFromElo(elo1v1);
       const rank2v2 = getRankFromElo(elo2v2);
+      const rank3v3 = getRankFromElo(elo3v3);
       const highestRank = getRankFromElo(highestElo);
 
       let streakText = 'No Streak';
@@ -848,6 +854,9 @@ client.on('interactionCreate', async interaction => {
           { name: '\u200b', value: '\u200b', inline: true },
           { name: '2v2 Rank', value: `${rank2v2.emoji} ${rank2v2.name}`, inline: true },
           { name: '2v2 ELO', value: `${elo2v2}`, inline: true },
+          { name: '\u200b', value: '\u200b', inline: true },
+          { name: '3v3 Rank', value: `${rank3v3.emoji} ${rank3v3.name}`, inline: true },
+          { name: '3v3 ELO', value: `${elo3v3}`, inline: true },
           { name: '\u200b', value: '\u200b', inline: true },
           { name: 'Wins', value: `${stats.wins}`, inline: true },
           { name: 'Losses', value: `${stats.losses}`, inline: true },
@@ -878,7 +887,7 @@ client.on('interactionCreate', async interaction => {
       const mode = interaction.options.getString('mode');
       const stats = getPlayerStats(guild.id, user.id);
 
-      const eloKey = mode === '1v1' ? 'elo1v1' : 'elo2v2';
+      const eloKey = mode === '1v1' ? 'elo1v1' : mode === '2v2' ? 'elo2v2' : 'elo3v3';
       const oldRank = getRankFromElo(stats[eloKey]);
 
       stats[eloKey] += amount;
@@ -916,7 +925,7 @@ client.on('interactionCreate', async interaction => {
       const mode = interaction.options.getString('mode');
       const stats = getPlayerStats(guild.id, user.id);
 
-      const eloKey = mode === '1v1' ? 'elo1v1' : 'elo2v2';
+      const eloKey = mode === '1v1' ? 'elo1v1' : mode === '2v2' ? 'elo2v2' : 'elo3v3';
       const oldRank = getRankFromElo(stats[eloKey]);
 
       stats[eloKey] = Math.max(0, stats[eloKey] - amount);
@@ -1010,8 +1019,6 @@ client.on('interactionCreate', async interaction => {
     }
 
     else if (commandName === 'leaderboard') {
-      const mode = interaction.options.getString('mode');
-      const eloKey = mode === '1v1' ? 'elo1v1' : 'elo2v2';
       const guildPlayers = [];
 
       for (const [key, stats] of playerStats) {
@@ -1020,38 +1027,53 @@ client.on('interactionCreate', async interaction => {
         }
       }
 
-      guildPlayers.sort((a, b) => (b[eloKey] || 800) - (a[eloKey] || 800));
-      const top10 = guildPlayers.slice(0, 10);
-
-      if (top10.length === 0) {
+      if (guildPlayers.length === 0) {
         return interaction.reply({
           content: 'No players have been registered yet!',
           ephemeral: true
         });
       }
 
-      let leaderboardText = '';
+      const modes = ['1v1', '2v2', '3v3'];
       const medals = ['🥇', '🥈', '🥉'];
+      const colors = [0xFF4500, 0x1E90FF, 0x9370DB];
+      const embeds = [];
 
-      for (let i = 0; i < top10.length; i++) {
-        const player = top10[i];
-        const playerElo = player[eloKey] || 800;
-        const rank = getRankFromElo(playerElo);
-        const position = i < 3 ? medals[i] : `**${i + 1}.**`;
-        leaderboardText += `${position} <@${player.userId}> - ${playerElo} ELO ${rank.emoji} ${rank.name}\n`;
+      for (let m = 0; m < modes.length; m++) {
+        const mode = modes[m];
+        const eloKey = mode === '1v1' ? 'elo1v1' : mode === '2v2' ? 'elo2v2' : 'elo3v3';
+        const sortedPlayers = [...guildPlayers].sort((a, b) => (b[eloKey] || 800) - (a[eloKey] || 800));
+        const top10 = sortedPlayers.slice(0, 10);
+
+        let leaderboardText = '';
+
+        if (top10.length === 0) {
+          leaderboardText = 'No players registered yet!';
+        } else {
+          for (let i = 0; i < top10.length; i++) {
+            const player = top10[i];
+            const playerElo = player[eloKey] || 800;
+            const rank = getRankFromElo(playerElo);
+            const position = i < 3 ? medals[i] : `**${i + 1}.**`;
+            leaderboardText += `${position} <@${player.userId}> - **${playerElo}** ELO ${rank.emoji}\n`;
+          }
+        }
+
+        const embed = new EmbedBuilder()
+          .setColor(colors[m])
+          .setTitle(`🏆 ${mode} Leaderboard - Top 10`)
+          .setDescription(leaderboardText)
+          .addFields(
+            { name: '📊 Rank Tiers', value: 
+              '💎 Diamond: 1600+\n🏆 Platinum: 1400+\n🥇 Gold: 1200+\n🥈 Silver: 1000+\n🥉 Bronze: 800+', inline: false }
+          )
+          .setFooter({ text: `${mode} Rankings` })
+          .setTimestamp();
+
+        embeds.push(embed);
       }
 
-      const embed = new EmbedBuilder()
-        .setColor(0xFFD700)
-        .setTitle(`🏆 ${mode} Leaderboard - Top 10`)
-        .setDescription(leaderboardText)
-        .addFields(
-          { name: '📊 Rank Tiers', value: 
-            '💎 DIAMOND: 1600-1700\n🏆 PLATINUM: 1400-1500\n🥇 GOLD: 1200-1300\n🥈 SILVER: 1000-1100\n🥉 BRONZE: 800-900', inline: false }
-        )
-        .setFooter({ text: `${mode} Rankings - Each win grants ELO!` });
-
-      await interaction.reply({ embeds: [embed] });
+      await interaction.reply({ embeds: embeds });
     }
 
     else if (commandName === 'viewhosts') {
@@ -1079,7 +1101,7 @@ client.on('interactionCreate', async interaction => {
       }
 
       settings.leaderboardChannel = channel.id;
-      settings.leaderboardMessages = { '1v1': null, '2v2': null };
+      settings.leaderboardMessages = { '1v1': null, '2v2': null, '3v3': null };
       saveSettings();
 
       const embed = new EmbedBuilder()
@@ -1122,11 +1144,13 @@ client.on('interactionCreate', async interaction => {
         }
       }
 
-      const modes = ['1v1', '2v2'];
+      const modes = ['1v1', '2v2', '3v3'];
       const medals = ['🥇', '🥈', '🥉'];
+      const colors = [0xFF4500, 0x1E90FF, 0x9370DB];
+      let colorIndex = 0;
 
       for (const mode of modes) {
-        const eloKey = mode === '1v1' ? 'elo1v1' : 'elo2v2';
+        const eloKey = mode === '1v1' ? 'elo1v1' : mode === '2v2' ? 'elo2v2' : 'elo3v3';
         const sortedPlayers = [...guildPlayers].sort((a, b) => (b[eloKey] || 800) - (a[eloKey] || 800));
         const top10 = sortedPlayers.slice(0, 10);
 
@@ -1147,7 +1171,7 @@ client.on('interactionCreate', async interaction => {
         }
 
         const embed = new EmbedBuilder()
-          .setColor(mode === '1v1' ? 0xFF4500 : 0x1E90FF)
+          .setColor(colors[colorIndex])
           .setTitle(`🏆 ${mode} Leaderboard - Top 10`)
           .setDescription(leaderboardText)
           .addFields(
@@ -1186,12 +1210,13 @@ client.on('interactionCreate', async interaction => {
         } catch (error) {
           console.error(`Error updating ${mode} leaderboard:`, error);
         }
+        colorIndex++;
       }
 
       const successEmbed = new EmbedBuilder()
         .setColor(0x57F287)
         .setTitle('Leaderboards Updated')
-        .setDescription(`Both 1v1 and 2v2 leaderboards have been updated in ${leaderboardChannel}!`);
+        .setDescription(`All leaderboards (1v1, 2v2, and 3v3) have been updated in ${leaderboardChannel}!`);
 
       await interaction.editReply({ embeds: [successEmbed] });
     }
@@ -1295,6 +1320,46 @@ client.on('interactionCreate', async interaction => {
         );
 
       await interaction.reply({ embeds: [embed] });
+    }
+
+    else if (commandName === 'kick') {
+      if (!isHost(member, guild.id)) {
+        return interaction.reply({ 
+          content: 'Only hosts can use this command.', 
+          ephemeral: true 
+        });
+      }
+
+      const user = interaction.options.getUser('user');
+      const channel = interaction.channel;
+      const member_to_kick = guild.members.cache.get(user.id);
+
+      if (!member_to_kick) {
+        return interaction.reply({
+          content: 'User not found in this server.',
+          ephemeral: true
+        });
+      }
+
+      try {
+        await channel.permissionOverwrites.edit(member_to_kick, { ViewChannel: false });
+        const embed = new EmbedBuilder()
+          .setColor(0xED4245)
+          .setTitle('User Removed from Channel')
+          .setDescription(`${user} has been removed from <#${channel.id}>.`)
+          .addFields(
+            { name: 'Removed By', value: `${member}`, inline: true },
+            { name: 'Channel', value: channel.name, inline: true }
+          );
+
+        await interaction.reply({ embeds: [embed] });
+      } catch (error) {
+        console.error('Error removing user from channel:', error);
+        await interaction.reply({
+          content: 'Failed to remove user from channel. Make sure I have the necessary permissions.',
+          ephemeral: true
+        });
+      }
     }
   }
 
