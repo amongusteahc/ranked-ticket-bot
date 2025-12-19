@@ -619,10 +619,12 @@ client.on('interactionCreate', async interaction => {
     }
 
     else if (commandName === 'add') {
-  const { guild, channel, member } = interaction;
+  const { channel, member } = interaction;
 
-  // ✅ Check if this channel is an active match channel
-  if (!activeMatches.has(channel.id)) {
+  // ✅ ALWAYS resolve match data this way
+  const matchData = getMatchData(channel.id);
+
+  if (!matchData) {
     return interaction.reply({
       content: '❌ This command can only be used in an active wager/match channel.',
       ephemeral: true
@@ -630,9 +632,7 @@ client.on('interactionCreate', async interaction => {
   }
 
   const userToAdd = interaction.options.getUser('user');
-  const matchData = activeMatches.get(channel.id);
 
-  // ✅ Prevent duplicates
   if (matchData.participants.includes(userToAdd.id)) {
     return interaction.reply({
       content: '❌ That user is already in this match.',
@@ -640,27 +640,24 @@ client.on('interactionCreate', async interaction => {
     });
   }
 
-  // ✅ Enforce player limits
   const maxPlayers =
     matchData.type === '1v1' ? 2 :
     matchData.type === '2v2' ? 4 : 6;
 
   if (matchData.participants.length >= maxPlayers) {
     return interaction.reply({
-      content: `❌ This ${matchData.type} match already has the maximum number of players (${maxPlayers}).`,
+      content: `❌ This ${matchData.type} match is already full (${maxPlayers} players).`,
       ephemeral: true
     });
   }
 
   try {
-    // ✅ Give channel access
     await channel.permissionOverwrites.edit(userToAdd.id, {
       ViewChannel: true,
       SendMessages: true,
       ReadMessageHistory: true
     });
 
-    // ✅ Save participant
     matchData.participants.push(userToAdd.id);
     activeMatches.set(channel.id, matchData);
     saveMatches();
@@ -671,13 +668,13 @@ client.on('interactionCreate', async interaction => {
       .setDescription(`${userToAdd} has been added to this ${matchData.type} match.`)
       .addFields(
         { name: 'Added By', value: `${member}`, inline: true },
-        { name: 'Total Players', value: `${matchData.participants.length}/${maxPlayers}`, inline: true }
+        { name: 'Players', value: `${matchData.participants.length}/${maxPlayers}`, inline: true }
       );
 
     await interaction.reply({ embeds: [embed] });
 
-  } catch (error) {
-    console.error('Error adding user to match:', error);
+  } catch (err) {
+    console.error('ADD ERROR:', err);
     await interaction.reply({
       content: '❌ Failed to add user. Check my permissions.',
       ephemeral: true
