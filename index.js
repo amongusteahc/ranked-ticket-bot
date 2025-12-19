@@ -424,18 +424,26 @@ client.once('ready', async () => {
   console.log(`Loaded ${playerStats.size} player stats`);
 
   // Clean up old match data for channels that no longer exist
+  const channelsToDelete = [];
   for (const [channelId] of activeMatches) {
     try {
       const channel = await client.channels.fetch(channelId).catch(() => null);
       if (!channel) {
-        activeMatches.delete(channelId);
-        console.log(`Removed stale match data for channel ${channelId}`);
+        channelsToDelete.push(channelId);
       }
     } catch (error) {
-      activeMatches.delete(channelId);
+      channelsToDelete.push(channelId);
     }
   }
-  saveMatches();
+  
+  for (const channelId of channelsToDelete) {
+    activeMatches.delete(channelId);
+    console.log(`Removed stale match data for channel ${channelId}`);
+  }
+  
+  if (channelsToDelete.length > 0) {
+    saveMatches();
+  }
 
   const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_BOT_TOKEN);
 
@@ -606,6 +614,11 @@ client.on('interactionCreate', async interaction => {
 
     else if (commandName === 'add') {
       const matchData = getMatchData(channel.id);
+      
+      console.log(`DEBUG add command: channel.id=${channel.id}, matchData=${matchData ? 'exists' : 'null'}, activeMatches.size=${activeMatches.size}`);
+      if (activeMatches.size > 0) {
+        console.log(`DEBUG activeMatches keys: ${[...activeMatches.keys()].join(', ')}`);
+      }
 
       if (!matchData) {
         return interaction.reply({ 
