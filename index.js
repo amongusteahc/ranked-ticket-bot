@@ -475,7 +475,8 @@ function getSettings(guildId) {
   }
   const settings = guildSettings.get(guildId);
   if (!settings.leaderboardChannel) settings.leaderboardChannel = null;
-  if (!settings.leaderboardMessages) settings.leaderboardMessages = { '1v1': null, '2v2': null };
+  if (!settings.leaderboardMessages) settings.leaderboardMessages = { '1v1': null, '2v2': null, '3v3': null };
+  else if (!settings.leaderboardMessages['3v3']) settings.leaderboardMessages['3v3'] = null;
   if (!settings.dodgeChannel) settings.dodgeChannel = null;
   return settings;
 }
@@ -499,10 +500,11 @@ client.on('interactionCreate', async interaction => {
       const embed = new EmbedBuilder()
         .setColor(0x8B0000)
         .setTitle('🎮 Ranked Matches')
-        .setDescription('Use this panel to initiate a ranked challenge.\n\n• **1v1 Ranked** - Challenge a single opponent\n• **2v2 Ranked** - Team up with a friend and challenge two opponents\n\nThe bot will create a private channel in the configured category.')
+        .setDescription('Use this panel to initiate a ranked challenge.\n\n• **1v1 Ranked** - Challenge a single opponent\n• **2v2 Ranked** - Team up with a friend and challenge two opponents\n• **3v3 Ranked** - Form a team of three and challenge opponents\n\nThe bot will create a private channel in the configured category.')
         .addFields(
           { name: '🎮 1v1 Ranked', value: 'Create a solo ranked match', inline: false },
-          { name: '🎮 2v2 Ranked', value: 'Team up with a friend', inline: false }
+          { name: '🎮 2v2 Ranked', value: 'Team up with a friend', inline: false },
+          { name: '🎮 3v3 Ranked', value: 'Team up with two friends', inline: false }
         )
         .setFooter({ text: 'Ranked System' });
 
@@ -515,6 +517,10 @@ client.on('interactionCreate', async interaction => {
           new ButtonBuilder()
             .setCustomId('start_2v2')
             .setLabel('Start 2v2')
+            .setStyle(ButtonStyle.Danger),
+          new ButtonBuilder()
+            .setCustomId('start_3v3')
+            .setLabel('Start 3v3')
             .setStyle(ButtonStyle.Danger)
         );
 
@@ -1128,7 +1134,9 @@ client.on('interactionCreate', async interaction => {
       }
 
       settings.leaderboardChannel = channel.id;
-      settings.leaderboardMessages = { '1v1': null, '2v2': null, '3v3': null };
+      if (!settings.leaderboardMessages) {
+        settings.leaderboardMessages = { '1v1': null, '2v2': null, '3v3': null };
+      }
       saveSettings();
 
       const embed = new EmbedBuilder()
@@ -1394,8 +1402,8 @@ client.on('interactionCreate', async interaction => {
     const { guild, member } = interaction;
     const settings = getSettings(guild.id);
 
-    if (interaction.customId === 'start_1v1' || interaction.customId === 'start_2v2') {
-      const matchType = interaction.customId === 'start_1v1' ? '1v1' : '2v2';
+    if (interaction.customId === 'start_1v1' || interaction.customId === 'start_2v2' || interaction.customId === 'start_3v3') {
+      const matchType = interaction.customId === 'start_1v1' ? '1v1' : interaction.customId === 'start_2v2' ? '2v2' : '3v3';
 
       if (settings.hostRoles.length === 0) {
         return interaction.reply({ 
@@ -1463,7 +1471,7 @@ client.on('interactionCreate', async interaction => {
         activeMatches.set(matchChannel.id, matchData);
         saveMatches();
 
-        const playerCount = matchType === '1v1' ? '2 players' : '4 players';
+        const playerCount = matchType === '1v1' ? '2 players' : matchType === '2v2' ? '4 players' : '6 players';
 
         const welcomeEmbed = new EmbedBuilder()
           .setColor(0x8B0000)
